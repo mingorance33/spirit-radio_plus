@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spirit Radio LW</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <h1>Spirit Radio LW</h1>
+
+      <div class="radio">
+        <div class="dial-wrapper">
+          <div id="dial" class="dial-line paused-anim"></div>
+        </div>
+        <div class="frequency-labels">
+          <span>153 kHz</span>
+          <span>170</span>
+          <span>200</span>
+          <span>230</span>
+          <span>260</span>
+          <span>281 kHz</span>
+        </div>
+      </div>
+
+      <div class="display">
+        <div id="message">OFFLINE</div>
+      </div>
+
+      <div class="controls">
+        <button id="btnToggle">Iniciar</button>
+        <button id="btnVisualizer" class="btn-secondary">📺</button>
+        <button id="btnInfo" class="btn-secondary">?</button>
+      </div>
+
+      <div id="infoModal" class="modal">
+        <div class="modal-content">
+          <span class="close">&times;</span>
+          <h3>Protocolo de Vigilancia Espectral</h3>
+          <div class="modal-scroll">
+            <p>La percepción de los sonidos paranormales se obtiene mediante el monitoreo de ondas reales del entorno:</p>
+            <p><strong>Ondas de Radio (LW):</strong> El móvil localiza y analiza ondas de radio (RF) específicamente en las bandas de baja frecuencia entre 153 y 281 kHz.</p>
+            <p><strong>Energía Cinética Sutil:</strong> Mediante los acelerómetros de alta precisión, la app detecta micro-vibraciones y variaciones en el estado de reposo del terminal.</p>
+            <p><strong>Sensores Complementarios:</strong> Se integran datos de magnetómetros y sensores infrarrojos para variaciones térmicas de proximidad.</p>
+            <hr class="modal-divider">
+            <p><strong>Protocolo de Coincidencia:</strong> Si se produce una coincidencia anormal, la aplicación muestra la última palabra aislada y la reproduce mediante el traductor interno para su análisis.</p>
+          </div>
+        </div>
+      </div>
+
+      <audio id="staticNoise" loop>
+        <source src="static.mp3" type="audio/mpeg" />
+      </audio>
+      <audio id="radioBank">
+        <source src="radio.mp3" type="audio/mpeg" />
+      </audio>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
