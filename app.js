@@ -20,7 +20,7 @@ let isSpeaking = false;
 
 // --- CONFIGURACIÓN DE IA (TensorFlow.js) ---
 let recognizer;
-const CONFIDENCE_THRESHOLD = 0.85; // Sensibilidad de la IA para detectar voces
+const CONFIDENCE_THRESHOLD = 0.55; // Sensibilidad de la IA para detectar voces
 
 async function initAI() {
     try {
@@ -197,9 +197,14 @@ async function startRadio() {
 
     playRandomRadioSlice();
     // Evento aleatorio de seguridad cada 40s si no hay interacción
-    paranormalTimerId = setInterval(() => {
-        if (!isSpeaking) triggerParanormalEvent("random");
-    }, 40000);
+   paranormalTimerId = setInterval(() => {
+    if (!isSpeaking && running) {
+        // Un 30% de probabilidad de que suelte una palabra aunque no oiga nada
+        if (Math.random() > 0.7) {
+            triggerParanormalEvent("forced_activity");
+        }
+    }
+}, 12000); // Chequeo cada 12 segundos
     
 }
 
