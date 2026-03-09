@@ -206,23 +206,27 @@ async function startRadio() {
 function stopRadio() {
     running = false;
     isSpeaking = false;
-    btnToggle.textContent = "Iniciar";
-    dialEl.classList.add('paused-anim');
     
-    if (recognizer) recognizer.stopListening();
-    
-    clearInterval(displayUpdateId);
-    clearInterval(paranormalTimerId);
-    clearTimeout(radioTimerId);
-    
-    staticNoise.pause();
-    radioBank.pause();
-    
-    if (visualWindow && !visualWindow.closed) visualWindow.postMessage({ type: 'STOP_ALL' }, '*');
+    // Limpieza de síntesis de voz (IMPORTANTE para iOS)
     window.speechSynthesis.cancel();
     
+    // Limpiar todos los timers
+    clearTimeout(radioTimerId);
+    clearTimeout(watchdogTimer);
+    clearInterval(displayUpdateId);
+    clearInterval(paranormalTimerId);
+    
+    if (recognizer) {
+        recognizer.stopListening();
+    }
+
+    // Reset visual
     msgEl.textContent = "OFFLINE";
     msgEl.classList.remove('evp-active');
+    
+    // Detener audios
+    staticNoise.pause();
+    radioBank.pause();
 }
 
 btnToggle.onclick = () => { if (running) stopRadio(); else startRadio(); };
