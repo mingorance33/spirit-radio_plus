@@ -1,7 +1,8 @@
 /**
  * @file app.js
- * @description Lógica de Spirit Radio LW con Reconocimiento de Voz Activo.
+ * @description Spirit Radio LW con IA (TensorFlow.js) y detección de entidades.
  */
+
 let running = false;
 const msgEl = document.getElementById("message");
 const btnToggle = document.getElementById("btnToggle");
@@ -15,31 +16,48 @@ let radioTimerId = null;
 let paranormalTimerId = null;
 let displayUpdateId = null;
 let phrases = [];
-let isSpeaking = false; 
+let isSpeaking = false;
 
-// --- RECONOCIMIENTO DE VOZ ---
-let recognition;
-function initSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+// --- CONFIGURACIÓN DE IA (TensorFlow.js) ---
+let recognizer;
+const CONFIDENCE_THRESHOLD = 0.85; // Sensibilidad de la IA para detectar voces
 
-    recognition = new SpeechRecognition();
-    recognition.lang = 'es-ES';
-    recognition.continuous = true;
-    recognition.interimResults = false;
+async function initAI() {
+    try {
+        // Cargamos el modelo de comandos de voz (FFT)
+        recognizer = speechCommands.create("BROWSER_FFT");
+        await recognizer.ensureModelLoaded();
+        console.log("IA: Modelo cargado correctamente.");
 
-    recognition.onresult = (event) => {
-        const last = event.results.length - 1;
-        const command = event.results[last][0].transcript.toLowerCase();
-        console.log("Escuchado:", command);
-        
-        // Si el usuario habla, forzamos respuesta lógica
-        if (running && !isSpeaking) {
-            triggerParanormalEvent(command);
-        }
-    };
+        // La IA escucha en segundo plano
+        recognizer.listen(result => {
+            if (!running || isSpeaking) return;
 
-    recognition.onend = () => { if (running) recognition.start(); };
+            const scores = result.scores;
+            const labels = recognizer.wordLabels();
+            let topScore = 0;
+            let wordDetected = "";
+
+            for (let i = 0; i < scores.length; i++) {
+                if (scores[i] > topScore) {
+                    topScore = scores[i];
+                    wordDetected = labels[i];
+                }
+            }
+
+            // Si la IA detecta "habla" humana por encima del umbral
+            if (topScore > CONFIDENCE_THRESHOLD && wordDetected !== '_background_noise_') {
+                console.log(`IA detectó entidad sonora: ${wordDetected} (${(topScore * 100).toFixed(2)}%)`);
+                triggerParanormalEvent(wordDetected);
+            }
+        }, {
+            includeSpectrogram: true,
+            probabilityThreshold: 0.70,
+            overlapFactor: 0.5
+        });
+    } catch (e) {
+        console.error("Error al iniciar la IA:", e);
+    }
 }
 
 // --- MOTOR DE AUDIO ---
@@ -55,7 +73,7 @@ function initAudioAnalysis() {
         sourceStatic.connect(analyser);
         sourceRadio.connect(analyser);
         analyser.connect(audioCtx.destination);
-        analyser.fftSize = 256; 
+        analyser.fftSize = 256;
         dataArray = new Uint8Array(analyser.frequencyBinCount);
     }
 }
@@ -64,22 +82,22 @@ function sendDataToVisualizer() {
     if (analyser) analyser.getByteFrequencyData(dataArray);
     if (visualWindow && !visualWindow.closed && running) {
         let total = 0;
-        for(let i = 0; i < dataArray.length; i++) total += dataArray[i];
+        for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
         let audioVolume = (total / dataArray.length) * 2;
         visualWindow.postMessage({ type: 'AUDIO_UPDATE', volume: audioVolume, isSpeaking: isSpeaking }, '*');
     }
 }
 
-// --- BARRIDO DE RADIO ---
+// --- BARRIDO DE RADIO (Audio Interno) ---
 function playRandomRadioSlice() {
     if (!running || isSpeaking) return;
     clearTimeout(radioTimerId);
     const duration = radioBank.duration || 10;
     radioBank.currentTime = Math.random() * duration;
     radioBank.volume = Math.random() * 0.4 + 0.2;
-    
+
     radioBank.play().then(() => {
-        const sliceDuration = Math.random() * 400 + 200; 
+        const sliceDuration = Math.random() * 400 + 200;
         radioTimerId = setTimeout(() => {
             radioBank.pause();
             if (running && !isSpeaking) {
@@ -91,10 +109,10 @@ function playRandomRadioSlice() {
     });
 }
 
-// --- LÓGICA DE RESPUESTA (EVP) ---
+// --- LÓGICA DE RESPUESTA INTELIGENTE (EVP) ---
 fetch('phrases.json').then(res => res.json()).then(data => phrases = data.phrases);
 
-function triggerParanormalEvent(userInput = "") {
+function triggerParanormalEvent(aiInput = "") {
     if (!running || phrases.length === 0 || isSpeaking) return;
 
     isSpeaking = true;
@@ -107,20 +125,25 @@ function triggerParanormalEvent(userInput = "") {
     setTimeout(() => {
         if (!running) return;
 
-        // Filtro lógico basado en el input del usuario
         let pool = phrases;
-        if (userInput.includes("quién") || userInput.includes("nombre")) {
-            pool = phrases.filter(p => /^[A-Z]/.test(p)); // Busca nombres (empiezan con mayúscula)
-        } else if (userInput.includes("estás") || userInput.includes("aquí")) {
-            pool = ["ESTOY AQUÍ", "CERCA", "DETRÁS DE TI", "NO ME VES"];
+        const inputLower = aiInput.toLowerCase();
+
+        // Lógica de "Dato Curioso": Reacción a Nombres o Identidad
+        if (inputLower.includes("quién") || inputLower.includes("nombre")) {
+            // Filtra solo los nombres (asumiendo que en tu JSON empiezan con Mayúscula)
+            pool = phrases.filter(p => /^[A-Z]/.test(p));
+        } else if (inputLower.includes("estás") || inputLower.includes("aquí")) {
+            pool = ["ESTOY AQUÍ", "CERCA", "DETRÁS DE TI", "NO ME VES", "SIEMPRE"];
         }
 
         const text = pool[Math.floor(Math.random() * pool.length)];
+        
+        // Voz sintética "de ultratumba"
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(text);
         utter.lang = 'es-ES';
-        utter.pitch = 0.1;
-        utter.rate = 0.5;
+        utter.pitch = 0.1; // Muy grave
+        utter.rate = 0.5;  // Muy lento
 
         utter.onstart = () => { msgEl.textContent = text.toUpperCase(); };
         utter.onend = () => resetAfterVoice();
@@ -135,13 +158,14 @@ function resetAfterVoice() {
     if (running) playRandomRadioSlice();
 }
 
-// --- CONTROLES ---
-function startRadio() {
+// --- CONTROLES PRINCIPALES ---
+async function startRadio() {
     initAudioAnalysis();
-    initSpeechRecognition();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    if (recognition) recognition.start();
+    if (!recognizer) await initAI(); // Inicia la IA la primera vez
     
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    // Desbloqueo de audio para móviles
     const unlock = new SpeechSynthesisUtterance("");
     window.speechSynthesis.speak(unlock);
 
@@ -150,7 +174,7 @@ function startRadio() {
     dialEl.classList.remove('paused-anim');
     staticNoise.volume = 0.15;
     staticNoise.play();
-    
+
     displayUpdateId = setInterval(() => {
         if (!isSpeaking && running) {
             const dialRect = dialEl.getBoundingClientRect();
@@ -160,9 +184,12 @@ function startRadio() {
         }
         sendDataToVisualizer();
     }, 50);
-    
+
     playRandomRadioSlice();
-    paranormalTimerId = setInterval(() => triggerParanormalEvent(), 25000); // Evento aleatorio cada 25s si no hay preguntas
+    // Evento aleatorio de seguridad cada 40s si no hay interacción
+    paranormalTimerId = setInterval(() => {
+        if (!isSpeaking) triggerParanormalEvent("random");
+    }, 40000);
 }
 
 function stopRadio() {
@@ -170,22 +197,30 @@ function stopRadio() {
     isSpeaking = false;
     btnToggle.textContent = "Iniciar";
     dialEl.classList.add('paused-anim');
-    if (recognition) recognition.stop();
+    
+    if (recognizer) recognizer.stopListening();
+    
     clearInterval(displayUpdateId);
     clearInterval(paranormalTimerId);
     clearTimeout(radioTimerId);
+    
     staticNoise.pause();
     radioBank.pause();
+    
     if (visualWindow && !visualWindow.closed) visualWindow.postMessage({ type: 'STOP_ALL' }, '*');
     window.speechSynthesis.cancel();
+    
     msgEl.textContent = "OFFLINE";
     msgEl.classList.remove('evp-active');
 }
 
 btnToggle.onclick = () => { if (running) stopRadio(); else startRadio(); };
-btnVisualizer.onclick = () => { visualWindow = window.open('visualizer.html', 'SpiritVisualizer', 'width=500,height=600'); };
 
-// Modal
+btnVisualizer.onclick = () => { 
+    visualWindow = window.open('visualizer.html', 'SpiritVisualizer', 'width=500,height=600'); 
+};
+
+// Modal Info
 const modal = document.getElementById("infoModal");
 document.getElementById("btnInfo").onclick = () => modal.style.display = "block";
 document.querySelector(".close").onclick = () => modal.style.display = "none";
