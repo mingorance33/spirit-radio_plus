@@ -112,9 +112,14 @@ function playRandomRadioSlice() {
 // --- LÓGICA DE RESPUESTA INTELIGENTE (EVP) ---
 fetch('phrases.json').then(res => res.json()).then(data => phrases = data.phrases);
 
+let watchdogTimer = null;
+
 function triggerParanormalEvent(aiInput = "") {
     if (!running || phrases.length === 0 || isSpeaking) return;
 
+    // Si ya había un vigilante, lo limpiamos
+    clearTimeout(watchdogTimer);
+    
     isSpeaking = true;
     clearTimeout(radioTimerId);
     radioBank.pause();
@@ -122,33 +127,21 @@ function triggerParanormalEvent(aiInput = "") {
     msgEl.classList.add('evp-active');
     msgEl.textContent = "SINTONIZANDO...";
 
-    setTimeout(() => {
-        if (!running) return;
-
-        let pool = phrases;
-        const inputLower = aiInput.toLowerCase();
-
-        // Lógica de "Dato Curioso": Reacción a Nombres o Identidad
-        if (inputLower.includes("quién") || inputLower.includes("nombre")) {
-            // Filtra solo los nombres (asumiendo que en tu JSON empiezan con Mayúscula)
-            pool = phrases.filter(p => /^[A-Z]/.test(p));
-        } else if (inputLower.includes("estás") || inputLower.includes("aquí")) {
-            pool = ["ESTOY AQUÍ", "CERCA", "DETRÁS DE TI", "NO ME VES", "SIEMPRE"];
+    // VIGILANTE: Si en 6 segundos no ha hablado, resetear a la fuerza
+    watchdogTimer = setTimeout(() => {
+        if (isSpeaking && msgEl.textContent === "SINTONIZANDO...") {
+            console.warn("Watchdog: Bloqueo detectado, reseteando...");
+            resetAfterVoice();
         }
+    }, 6000);
 
-        const text = pool[Math.floor(Math.random() * pool.length)];
-        
-        // Voz sintética "de ultratumba"
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'es-ES';
-        utter.pitch = 0.1; // Muy grave
-        utter.rate = 0.5;  // Muy lento
-
-        utter.onstart = () => { msgEl.textContent = text.toUpperCase(); };
-        utter.onend = () => resetAfterVoice();
-        utter.onerror = () => resetAfterVoice();
-        window.speechSynthesis.speak(utter);
+    // ... resto de tu código de setTimeout para la voz ...
+    setTimeout(() => {
+        if (!running) {
+            resetAfterVoice();
+            return;
+        }
+        // ... (el resto de la lógica de frases que ya tienes)
     }, 1200);
 }
 
@@ -169,6 +162,23 @@ async function startRadio() {
     const unlock = new SpeechSynthesisUtterance("");
     window.speechSynthesis.speak(unlock);
 
+// TRUCO PARA IOS: Reanudar el audio cada vez que el usuario toca la pantalla
+    // o ante cualquier interrupción
+    const resumeAudio = () => {
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    };
+    document.addEventListener('click', resumeAudio);
+    document.addEventListener('touchstart', resumeAudio);
+
+    // Asegurarnos de que el reconocedor de IA esté activo
+    if (recognizer && !recognizer.isListening()) {
+        await startAI(); // Función auxiliar para re-conectar
+    }
+
+
+    
     running = true;
     btnToggle.textContent = "Detener";
     dialEl.classList.remove('paused-anim');
@@ -190,6 +200,7 @@ async function startRadio() {
     paranormalTimerId = setInterval(() => {
         if (!isSpeaking) triggerParanormalEvent("random");
     }, 40000);
+    
 }
 
 function stopRadio() {
